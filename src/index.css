@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  /* Remove display: flex and place-items: center */
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #020617; /* Matches bg-slate-950 */
+}
+
+#root {
+  width: 100%;
+}
