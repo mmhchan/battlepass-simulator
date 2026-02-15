@@ -4,50 +4,54 @@ export function simulateSeason(persona: Persona, config: SeasonConfig): Simulati
   const history: SimulationResult[] = [];
   let totalXp = 0;
 
+  // Pre-calculate total play days for milestone XP distribution
+  const activeDays = config.totalDays - persona.startDay;
+  const activeWeeks = Math.ceil(activeDays / 7);
+  const totalPlayDays = Math.min(activeDays, activeWeeks * persona.sessionsPerWeek);
+  const milestoneXpPerPlayDay = totalPlayDays > 0 ? config.milestoneXp / totalPlayDays : 0;
+
+  // Track weekly challenge completion
+  let weeklyChallengesCleared = 0;
+  let challengePlayMins = 0; // Accumulated play minutes toward clearing challenges
+
   for (let day = 0; day < config.totalDays; day++) {
-    // 1. Check if the player has even joined yet
     if (day < persona.startDay) {
       history.push({ day, tier: 0, totalXp: 0 });
       continue;
     }
 
-    // 2. Determine if they play today (Stochastic modeling)
-    const playProbability = persona.sessionsPerWeek / 7;
-    const isPlayingToday = Math.random() < playProbability;
+    const dayInWeek = day % 7;
+    const isPlayingToday = dayInWeek < persona.sessionsPerWeek;
 
     if (isPlayingToday) {
-      // Time-based XP
       totalXp += persona.minutesPerSession * config.xpPerMinute;
-      // Daily Reward
       totalXp += config.dailyQuestXp;
+      totalXp += milestoneXpPerPlayDay;
 
-      // 3. Weekly Challenges (The Catch-up Logic)
       const currentWeek = Math.floor(day / 7);
-      
+      const weeksAvailable = currentWeek + 1;
+
       if (config.isWeeklyStackable) {
-        // PM Logic: If you join late, you can do all 'unlocked' weeks.
-        // We simulate this by checking if it's a play day and rewarding 
-        // a portion of the available backlog.
-        const weeksAvailable = currentWeek + 1;
-        // Simple simulation: you clear 1 week's worth of challenges 
-        // per play session until you are caught up.
-        const weeksCleared = Math.min(weeksAvailable, 1); 
-        totalXp += weeksCleared * (config.weeklyChallengeXp / (persona.sessionsPerWeek || 1));
-      } else {
-        // If not stackable, you only get the current week's XP
-        if (day % 7 === 0) { // Only on the "reset" day
-          totalXp += config.weeklyChallengeXp;
+        // Stackable: play time determines how quickly backlog is cleared
+        challengePlayMins += persona.minutesPerSession;
+        const clearable = Math.floor(challengePlayMins / config.challengeClearMins);
+        if (clearable > 0) {
+          const toClear = Math.min(clearable, weeksAvailable - weeklyChallengesCleared);
+          if (toClear > 0) {
+            totalXp += config.weeklyChallengeXp * toClear;
+            weeklyChallengesCleared += toClear;
+            challengePlayMins -= toClear * config.challengeClearMins;
+          }
         }
+      } else if (dayInWeek === 0 && weeksAvailable > weeklyChallengesCleared) {
+        // Non-stackable: one set of challenges per week, use it or lose it
+        totalXp += config.weeklyChallengeXp;
+        weeklyChallengesCleared = weeksAvailable;
       }
     }
 
     const currentTier = Math.min(config.totalTiers, Math.floor(totalXp / config.xpPerTier));
-    
-    history.push({
-      day,
-      tier: currentTier,
-      totalXp
-    });
+    history.push({ day, tier: currentTier, totalXp });
   }
 
   return history;

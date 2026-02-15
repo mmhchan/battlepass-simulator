@@ -1,4 +1,6 @@
-import type { ChangeEvent } from 'react';
+import { useState, useEffect } from 'react';
+import { Info } from 'lucide-react';
+import { Tooltip } from '@/components/ui/Tooltip';
 
 interface SliderProps {
   label: string;
@@ -8,19 +10,30 @@ interface SliderProps {
   step?: number;
   onChange: (value: number) => void;
   suffix?: string;
+  prefix?: string;
+  tooltip?: string;
 }
 
-export const Slider = ({ label, value, min, max, step = 1, onChange, suffix = "" }: SliderProps) => {
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    onChange(Number(e.target.value));
-  };
+export const Slider = ({ label, value, min, max, step = 1, onChange, suffix = "", prefix = "", tooltip }: SliderProps) => {
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
 
   return (
-    <div className="space-y-3 mb-6">
-      <div className="flex justify-between items-center">
-        <label className="text-sm font-medium text-slate-300">{label}</label>
-        <span className="text-sm font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded">
-          {value.toLocaleString()}{suffix}
+    <div className="space-y-2">
+      <div className="flex justify-between">
+        <label className="text-sm font-medium text-sage-500 inline-flex items-center gap-1">
+          {label}
+          {tooltip && (
+            <Tooltip content={tooltip}>
+              <Info size={12} className="text-sage-300 hover:text-sage-500 cursor-help transition-colors" />
+            </Tooltip>
+          )}
+        </label>
+        <span className="text-sm font-mono text-sage-600">
+          {prefix}{step < 1 ? localValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : localValue.toLocaleString()}{suffix}
         </span>
       </div>
       <input
@@ -28,9 +41,11 @@ export const Slider = ({ label, value, min, max, step = 1, onChange, suffix = ""
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={handleChange}
-        className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400 transition-all"
+        value={localValue}
+        onChange={(e) => setLocalValue(Number(e.target.value))}
+        onMouseUp={() => onChange(localValue)}
+        onTouchEnd={() => onChange(localValue)}
+        className="w-full h-1.5 bg-sage-100 rounded-lg appearance-none cursor-pointer accent-sage-600"
       />
     </div>
   );
