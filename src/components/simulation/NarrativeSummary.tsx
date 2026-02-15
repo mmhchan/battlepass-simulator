@@ -21,13 +21,12 @@ interface PaceShift {
   slowdown: number;       // percentage slower (positive = slowing down)
 }
 
-interface ChallengeDep {
+interface MissTolerance {
   id: string;
   name: string;
   color: string;
-  challengeDayAvgGain: number;
-  normalDayAvgGain: number;
-  ratio: number; // how many x more XP on challenge days
+  tiersLost: number;       // tiers lost from missing one week mid-season
+  costToRecover: number;   // dollar cost to buy back those tiers
 }
 
 export const NarrativeSummary = () => {
@@ -107,55 +106,30 @@ export const NarrativeSummary = () => {
       return { id: r.persona.id, name: r.persona.name, color: r.persona.color, firstHalfRate, secondHalfRate, slowdown };
     });
 
-    // --- Challenge dependency: compare XP gains on potential challenge days vs normal play days ---
-    const challengeDeps: ChallengeDep[] = results.map(r => {
+    // --- Miss tolerance: how many tiers does missing one week mid-season cost? ---
+    const missTolerances: MissTolerance[] = results.map(r => {
       const data = r.data;
-      const challengeDayGains: number[] = [];
-      const normalDayGains: number[] = [];
+      // Sample a week from mid-season (40% through active days)
+      const activeStart = r.persona.startDay;
+      const midPoint = activeStart + Math.floor((data.length - activeStart) * 0.4);
+      const weekEnd = Math.min(midPoint + 7, data.length - 1);
 
-      for (let i = 1; i < data.length; i++) {
-        if (i < r.persona.startDay) continue;
-        const gain = data[i].totalXp - data[i - 1].totalXp;
-        if (gain === 0) continue;
-
-        const dayInWeek = i % 7;
-        const isPlayDay = dayInWeek < r.persona.sessionsPerWeek;
-        if (!isPlayDay) continue;
-
-        // Challenge days: first play day of the week for non-stackable,
-        // or any day with outsized gains for stackable
-        if (dayInWeek === 0) {
-          challengeDayGains.push(gain);
-        } else {
-          normalDayGains.push(gain);
-        }
-      }
-
-      const challengeAvg = challengeDayGains.length > 0
-        ? challengeDayGains.reduce((a, b) => a + b, 0) / challengeDayGains.length
-        : 0;
-      const normalAvg = normalDayGains.length > 0
-        ? normalDayGains.reduce((a, b) => a + b, 0) / normalDayGains.length
-        : 0;
+      const tiersInWeek = (data[weekEnd]?.tier || 0) - (data[midPoint]?.tier || 0);
+      const tiersLost = Math.round(tiersInWeek * 10) / 10;
 
       return {
         id: r.persona.id,
         name: r.persona.name,
         color: r.persona.color,
-        challengeDayAvgGain: challengeAvg,
-        normalDayAvgGain: normalAvg,
-        ratio: normalAvg > 0 ? challengeAvg / normalAvg : 0,
+        tiersLost,
+        costToRecover: tiersLost * config.costPerTier,
       };
     });
 
-    return { completionPhrase, avgCompletion, avgCost, pressurePhrase, paceMilestones, paceShifts, challengeDeps };
+    return { completionPhrase, avgCompletion, avgCost, pressurePhrase, paceMilestones, paceShifts, missTolerances };
   }, [results, config]);
 
   if (!summary) return null;
-
-  const avgRatio = summary.challengeDeps.length > 0
-    ? summary.challengeDeps.reduce((a, b) => a + b.ratio, 0) / summary.challengeDeps.length
-    : 0;
 
   return (
     <div className="mt-4">
@@ -215,8 +189,8 @@ export const NarrativeSummary = () => {
                 const fastest = sorted[0];
                 const slowest = sorted[sorted.length - 1];
                 const gap = slowest.day50! - fastest.day50!;
-                if (gap === 0) return 'All personas reach the midpoint at roughly the same time — a well-balanced economy.';
-                return `${fastest.name} hits the midpoint ${gap} days before ${slowest.name}.`;
+                if (gap === 0) return 'All personas reach the midpoint at roughly the same time.';
+                return `${fastest.name} hits the midpoint ${gap} days before ${slowest.name} — a ${gap > 20 ? 'wide' : 'moderate'} spread across player types.`;
               })()}
             </p>
           </div>
@@ -254,41 +228,46 @@ export const NarrativeSummary = () => {
               {(() => {
                 const significantSlowdowns = summary.paceShifts.filter(p => p.slowdown > 25);
                 if (significantSlowdowns.length > 0) {
-                  return 'A sharp second-half slowdown signals that early XP sources (challenge backlogs, milestone bursts) are front-loaded. Players who join late or miss early weeks will feel this acutely.';
+                  const names = significantSlowdowns.map(p => p.name).join(', ');
+                  return `${names} ${significantSlowdowns.length === 1 ? 'earns' : 'earn'} tiers significantly faster in the first half. Late joiners would experience a slower grind than day-one players did.`;
                 }
                 const anySlowdown = summary.paceShifts.some(p => p.slowdown > 5);
                 if (anySlowdown) {
-                  return 'Moderate pace shift — the second half is noticeably slower as early XP bonuses taper off. Consider whether this creates the right urgency or frustration.';
+                  return 'The second half is noticeably slower than the first as one-time XP sources are consumed.';
                 }
-                return 'Progression is evenly paced across the season — players earn tiers at a consistent rate from start to finish.';
+                return 'Tier earn rate is consistent from start to finish across all personas.';
               })()}
             </p>
           </div>
 
-          {/* Challenge Dependency */}
+          {/* Miss Tolerance */}
           <div>
-            <h4 className="text-xs font-bold uppercase tracking-widest text-sage-400 mb-2">Challenge Dependency</h4>
+            <h4 className="text-xs font-bold uppercase tracking-widest text-sage-400 mb-1">Miss Tolerance</h4>
+            <p className="text-xs text-sage-400 mb-2">Impact of missing one full week of play mid-season.</p>
             <div className="space-y-1.5">
-              {summary.challengeDeps.map(c => (
-                <div key={c.id} className="flex items-center gap-2 text-sm" onMouseEnter={() => setHoveredPersonaId(c.id)} onMouseLeave={() => setHoveredPersonaId(null)}>
-                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
-                  <span className="text-sage-700 font-medium min-w-[100px]">{c.name}</span>
+              {summary.missTolerances.map(m => (
+                <div key={m.id} className="flex items-center gap-2 text-sm" onMouseEnter={() => setHoveredPersonaId(m.id)} onMouseLeave={() => setHoveredPersonaId(null)}>
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: m.color }} />
+                  <span className="text-sage-700 font-medium min-w-[100px]">{m.name}</span>
                   <span className="text-sage-500">
-                    earns{' '}
-                    <span className={`font-mono ${c.ratio > 2 ? 'text-amber-600' : 'text-sage-700'}`}>
-                      {c.ratio.toFixed(1)}x
+                    loses{' '}
+                    <span className={`font-mono ${m.tiersLost > 8 ? 'text-rose-500' : m.tiersLost > 4 ? 'text-amber-600' : 'text-sage-700'}`}>
+                      {m.tiersLost} tiers
                     </span>
-                    {' '}more XP on weekly reset days vs regular play
+                    {m.costToRecover > 0 && (
+                      <>{' '}(<span className="font-mono text-sage-600">${m.costToRecover.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> to buy back)</>
+                    )}
                   </span>
                 </div>
               ))}
             </div>
             <p className="text-xs text-sage-400 mt-2 leading-relaxed">
-              {avgRatio > 2.5
-                ? 'Challenges are carrying the economy heavily. Missing a week has outsized consequences — players who fall behind may feel the system is punishing.'
-                : avgRatio > 1.5
-                  ? 'Challenges provide a meaningful boost but passive play still contributes. A balanced economy that rewards both consistency and engagement.'
-                  : 'Passive play dominates progression. Challenges feel optional — consider increasing challenge XP if you want to drive engagement loops.'}
+              {(() => {
+                const avgLost = summary.missTolerances.reduce((a, b) => a + b.tiersLost, 0) / summary.missTolerances.length;
+                if (avgLost > 8) return `Missing one week costs an average of ${Math.round(avgLost)} tiers — enough to push borderline personas from completing to falling short.`;
+                if (avgLost > 3) return `A missed week costs a few tiers on average. Players near the finish line can recover, but casual players may not.`;
+                return 'A missed week has minimal impact — the economy is forgiving enough that players can recover.';
+              })()}
             </p>
           </div>
         </div>

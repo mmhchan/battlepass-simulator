@@ -1,73 +1,51 @@
-# React + TypeScript + Vite
+# Battle Pass Simulator
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An interactive tool for game designers and product managers to model battle pass progression across different player archetypes.
 
-Currently, two official plugins are available:
+[Live Tool](https://mmhchan.github.io/battlepass-simulator/)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## The Objective
 
-## React Compiler
+Battle pass economies are difficult to balance by intuition alone. A season that feels fair to a daily player may be punishing to a weekend-only player — and the difference shows up in churn and conversion, not in spreadsheets. This tool simulates day-by-day progression for configurable player personas so you can visualize:
+- *Which player types complete the pass, and which fall short?*
+- *How much would a player need to spend to finish?*
+- *What happens if someone misses a week?*
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Key Features
 
-## Expanding the ESLint configuration
+- **Player Personas:** Define up to 4 player archetypes with different session frequency, playtime, and start day.
+- **Season Blueprint:** Tune XP rates, challenge rewards, tier costs, and monetization levers.
+- **Narrative Insights:** Expandable summary with pace milestones, pace shift analysis, and miss tolerance per persona.
+- **Presets:** Load preset economies (Balanced, Generous Grind, Time-Gated, Whale Bait) to explore different design philosophies.
+- **Save/Load:** Export and import simulation snapshots as JSON files.
+- **Hover Highlighting:** Mouse over any persona card, legend entry, or insight row to highlight the corresponding chart line.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Tech Stack
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- **Framework:** React 19 (Vite 7)
+- **Language:** TypeScript
+- **State:** Zustand (persisted to localStorage)
+- **Visualization:** Recharts 3.x
+- **Styling:** Tailwind CSS v4
+- **Icons:** Lucide React
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Local Installation
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+# Clone the repository
+git clone https://github.com/mmhchan/battlepass-simulator.git
+
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+
+# Production build
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Contact
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Created by **Michael Chan**
+- **LinkedIn:** [linkedin.com/in/mmhchan](https://linkedin.com/in/mmhchan)
