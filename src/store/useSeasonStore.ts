@@ -14,7 +14,6 @@ export const useUIStore = create<UIState>()((set) => ({
 import type { SeasonConfig, Persona } from '@/engine/types';
 import {
   MAX_PERSONAS,
-  COLOR_PALETTE,
   DEFAULT_CONFIG,
   DEFAULT_PERSONAS,
   PERSONA_TEMPLATES,
