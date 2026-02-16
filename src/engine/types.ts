@@ -26,6 +26,14 @@ export interface SimulationResult {
     totalXp: number;
 }
 
+export interface XpBreakdown {
+    passive: number;      // minutesPerSession * xpPerMinute
+    dailyQuests: number;  // dailyQuestXp per play day
+    weeklyChallenges: number;
+    milestones: number;   // distributed milestone XP
+    total: number;
+}
+
 export interface SimulationSnapshot {
     version: number;
     config: SeasonConfig;

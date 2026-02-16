@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useSeasonStore } from '@/store/useSeasonStore';
-import { simulateSeason } from '@/engine/calculator';
+import { simulateSeason, getXpBreakdown } from '@/engine/calculator';
 
 export const useSimulation = () => {
     const { config, personas } = useSeasonStore();
@@ -15,7 +15,8 @@ export const useSimulation = () => {
                     day: dayData.day,
                     tier: dayData.tier,
                     totalXp: dayData.totalXp
-                }))
+                })),
+                xpBreakdown: getXpBreakdown(persona, config),
             };
         });
     }, [config, personas]);

@@ -19,6 +19,7 @@ interface PaceShift {
   firstHalfRate: number;  // tiers per week in first half
   secondHalfRate: number; // tiers per week in second half
   slowdown: number;       // percentage slower (positive = slowing down)
+  completed: boolean;     // whether persona hit the tier cap
 }
 
 interface MissTolerance {
@@ -27,6 +28,8 @@ interface MissTolerance {
   color: string;
   tiersLost: number;       // tiers lost from missing one week mid-season
   costToRecover: number;   // dollar cost to buy back those tiers
+  stillCompletes: boolean; // would they still finish after missing a week?
+  surplusTiers: number;    // tiers of headroom beyond the goal (uncapped)
 }
 
 export const NarrativeSummary = () => {
@@ -84,17 +87,32 @@ export const NarrativeSummary = () => {
     });
 
     // --- Pace shift: compare first-half vs second-half tier gain rate ---
+    // Only measures up to the point a persona hits the tier cap to avoid
+    // false "slowdown" when a persona has simply completed the pass.
     const paceShifts: PaceShift[] = results.map(r => {
       const data = r.data;
       const startIdx = r.persona.startDay;
-      const activeDays = data.length - startIdx;
+
+      // Find the last day progression actually occurs (before hitting cap)
+      let effectiveEnd = data.length - 1;
+      const finalTier = data[effectiveEnd]?.tier || 0;
+      if (finalTier >= config.totalTiers) {
+        const capIdx = data.findIndex(d => d.tier >= config.totalTiers);
+        if (capIdx >= 0) effectiveEnd = capIdx;
+      }
+
+      const activeDays = effectiveEnd - startIdx;
+      if (activeDays <= 0) {
+        return { id: r.persona.id, name: r.persona.name, color: r.persona.color, firstHalfRate: 0, secondHalfRate: 0, slowdown: 0, completed: finalTier >= config.totalTiers };
+      }
+
       const midpoint = startIdx + Math.floor(activeDays / 2);
 
       const firstHalfTiers = (data[midpoint]?.tier || 0) - (data[startIdx]?.tier || 0);
-      const secondHalfTiers = (data[data.length - 1]?.tier || 0) - (data[midpoint]?.tier || 0);
+      const secondHalfTiers = (data[effectiveEnd]?.tier || 0) - (data[midpoint]?.tier || 0);
 
       const firstHalfWeeks = (midpoint - startIdx) / 7;
-      const secondHalfWeeks = (data.length - 1 - midpoint) / 7;
+      const secondHalfWeeks = (effectiveEnd - midpoint) / 7;
 
       const firstHalfRate = firstHalfWeeks > 0 ? firstHalfTiers / firstHalfWeeks : 0;
       const secondHalfRate = secondHalfWeeks > 0 ? secondHalfTiers / secondHalfWeeks : 0;
@@ -103,26 +121,46 @@ export const NarrativeSummary = () => {
         ? Math.round(((firstHalfRate - secondHalfRate) / firstHalfRate) * 100)
         : 0;
 
-      return { id: r.persona.id, name: r.persona.name, color: r.persona.color, firstHalfRate, secondHalfRate, slowdown };
+      return { id: r.persona.id, name: r.persona.name, color: r.persona.color, firstHalfRate, secondHalfRate, slowdown, completed: finalTier >= config.totalTiers };
     });
 
     // --- Miss tolerance: how many tiers does missing one week mid-season cost? ---
+    // Samples a week before the persona hits the tier cap so that completed
+    // personas still show a meaningful "what if you missed a week" value.
     const missTolerances: MissTolerance[] = results.map(r => {
       const data = r.data;
-      // Sample a week from mid-season (40% through active days)
       const activeStart = r.persona.startDay;
-      const midPoint = activeStart + Math.floor((data.length - activeStart) * 0.4);
+
+      // Find where progression is still happening (before cap)
+      let sampleEnd = data.length - 1;
+      const finalTier = data[sampleEnd]?.tier || 0;
+      if (finalTier >= config.totalTiers) {
+        const capIdx = data.findIndex(d => d.tier >= config.totalTiers);
+        if (capIdx >= 0) sampleEnd = capIdx;
+      }
+
+      // Sample a week from 40% through the active (uncapped) progression
+      const activeDays = sampleEnd - activeStart;
+      const midPoint = activeStart + Math.floor(Math.max(activeDays, 7) * 0.4);
       const weekEnd = Math.min(midPoint + 7, data.length - 1);
 
       const tiersInWeek = (data[weekEnd]?.tier || 0) - (data[midPoint]?.tier || 0);
       const tiersLost = Math.round(tiersInWeek * 10) / 10;
+
+      // Calculate uncapped surplus: how many tiers of headroom beyond the goal
+      const finalXp = data[data.length - 1]?.totalXp || 0;
+      const uncappedTiers = Math.floor(finalXp / config.xpPerTier);
+      const surplusTiers = Math.max(0, uncappedTiers - config.totalTiers);
+      const stillCompletes = surplusTiers >= tiersLost;
 
       return {
         id: r.persona.id,
         name: r.persona.name,
         color: r.persona.color,
         tiersLost,
-        costToRecover: tiersLost * config.costPerTier,
+        costToRecover: stillCompletes ? 0 : tiersLost * config.costPerTier,
+        stillCompletes,
+        surplusTiers,
       };
     });
 
@@ -204,38 +242,46 @@ export const NarrativeSummary = () => {
                 <div key={p.id} className="flex items-center gap-2 text-sm" onMouseEnter={() => setHoveredPersonaId(p.id)} onMouseLeave={() => setHoveredPersonaId(null)}>
                   <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
                   <span className="text-sage-700 font-medium min-w-[100px]">{p.name}</span>
-                  <span className="text-sage-500">
-                    <span className="font-mono text-sage-700">{p.firstHalfRate.toFixed(1)}</span>
-                    {' '}&rarr;{' '}
-                    <span className="font-mono text-sage-700">{p.secondHalfRate.toFixed(1)}</span>
-                    {' '}tiers/week
-                    {p.slowdown > 5 ? (
-                      <span className={`font-mono ml-1 ${p.slowdown > 25 ? 'text-rose-500' : 'text-amber-600'}`}>
-                        ({p.slowdown}% slower)
-                      </span>
-                    ) : p.slowdown < -5 ? (
-                      <span className="font-mono text-emerald-500 ml-1">
-                        ({Math.abs(p.slowdown)}% faster)
-                      </span>
-                    ) : (
-                      <span className="text-sage-400 ml-1">(steady)</span>
-                    )}
-                  </span>
+                  {p.completed && p.firstHalfRate === 0 && p.secondHalfRate === 0 ? (
+                    <span className="text-emerald-500 font-medium">Completed immediately</span>
+                  ) : (
+                    <span className="text-sage-500">
+                      <span className="font-mono text-sage-700">{p.firstHalfRate.toFixed(1)}</span>
+                      {' '}&rarr;{' '}
+                      <span className="font-mono text-sage-700">{p.secondHalfRate.toFixed(1)}</span>
+                      {' '}tiers/week
+                      {p.completed ? (
+                        <span className="text-emerald-500 ml-1">(completed)</span>
+                      ) : p.slowdown > 5 ? (
+                        <span className={`font-mono ml-1 ${p.slowdown > 25 ? 'text-rose-500' : 'text-amber-600'}`}>
+                          ({p.slowdown}% slower)
+                        </span>
+                      ) : p.slowdown < -5 ? (
+                        <span className="font-mono text-emerald-500 ml-1">
+                          ({Math.abs(p.slowdown)}% faster)
+                        </span>
+                      ) : (
+                        <span className="text-sage-400 ml-1">(steady)</span>
+                      )}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
             <p className="text-xs text-sage-400 mt-2 leading-relaxed">
               {(() => {
-                const significantSlowdowns = summary.paceShifts.filter(p => p.slowdown > 25);
+                const uncapped = summary.paceShifts.filter(p => !p.completed);
+                if (uncapped.length === 0) return 'All personas complete the pass — pace shift is not applicable.';
+                const significantSlowdowns = uncapped.filter(p => p.slowdown > 25);
                 if (significantSlowdowns.length > 0) {
                   const names = significantSlowdowns.map(p => p.name).join(', ');
                   return `${names} ${significantSlowdowns.length === 1 ? 'earns' : 'earn'} tiers significantly faster in the first half. Late joiners would experience a slower grind than day-one players did.`;
                 }
-                const anySlowdown = summary.paceShifts.some(p => p.slowdown > 5);
+                const anySlowdown = uncapped.some(p => p.slowdown > 5);
                 if (anySlowdown) {
                   return 'The second half is noticeably slower than the first as one-time XP sources are consumed.';
                 }
-                return 'Tier earn rate is consistent from start to finish across all personas.';
+                return 'Tier earn rate is consistent from start to finish across non-completing personas.';
               })()}
             </p>
           </div>
@@ -254,19 +300,24 @@ export const NarrativeSummary = () => {
                     <span className={`font-mono ${m.tiersLost > 8 ? 'text-rose-500' : m.tiersLost > 4 ? 'text-amber-600' : 'text-sage-700'}`}>
                       {m.tiersLost} tiers
                     </span>
-                    {m.costToRecover > 0 && (
-                      <>{' '}(<span className="font-mono text-sage-600">${m.costToRecover.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> to buy back)</>
-                    )}
+                    {m.stillCompletes ? (
+                      <span className="text-emerald-500 ml-1">— still completes</span>
+                    ) : m.costToRecover > 0 ? (
+                      <span className="text-sage-500 ml-1">
+                        — <span className="font-mono text-sage-600">${m.costToRecover.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> to buy back
+                      </span>
+                    ) : null}
                   </span>
                 </div>
               ))}
             </div>
             <p className="text-xs text-sage-400 mt-2 leading-relaxed">
               {(() => {
-                const avgLost = summary.missTolerances.reduce((a, b) => a + b.tiersLost, 0) / summary.missTolerances.length;
-                if (avgLost > 8) return `Missing one week costs an average of ${Math.round(avgLost)} tiers — enough to push borderline personas from completing to falling short.`;
-                if (avgLost > 3) return `A missed week costs a few tiers on average. Players near the finish line can recover, but casual players may not.`;
-                return 'A missed week has minimal impact — the economy is forgiving enough that players can recover.';
+                const recoverable = summary.missTolerances.filter(m => m.stillCompletes).length;
+                const total = summary.missTolerances.length;
+                if (recoverable === total) return 'All personas can absorb a missed week and still complete the pass.';
+                if (recoverable === 0) return 'No persona can afford to miss a week and still complete — the economy has no margin for breaks.';
+                return `${recoverable} of ${total} personas can miss a week and still finish. The rest would need to purchase tiers to recover.`;
               })()}
             </p>
           </div>

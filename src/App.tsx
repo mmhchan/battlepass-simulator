@@ -48,7 +48,7 @@ export default function App() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-bold text-sage-900 inline-flex items-center gap-2">
-                  Player Segments
+                  Player Personas
                   <span className={`text-xs font-medium transition-colors duration-500 ${personas.length === 0
                       ? 'text-sage-600'
                       : 'text-sage-400'

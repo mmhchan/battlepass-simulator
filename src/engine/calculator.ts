@@ -1,4 +1,4 @@
-import type { Persona, SeasonConfig, SimulationResult } from './types';
+import type { Persona, SeasonConfig, SimulationResult, XpBreakdown } from './types';
 
 export function simulateSeason(persona: Persona, config: SeasonConfig): SimulationResult[] {
   const history: SimulationResult[] = [];
@@ -55,4 +55,58 @@ export function simulateSeason(persona: Persona, config: SeasonConfig): Simulati
   }
 
   return history;
+}
+
+export function getXpBreakdown(persona: Persona, config: SeasonConfig): XpBreakdown {
+  const activeDays = config.totalDays - persona.startDay;
+  const activeWeeks = Math.ceil(activeDays / 7);
+  const totalPlayDays = Math.min(activeDays, activeWeeks * persona.sessionsPerWeek);
+  const milestoneXpPerPlayDay = totalPlayDays > 0 ? config.milestoneXp / totalPlayDays : 0;
+
+  let passive = 0;
+  let dailyQuests = 0;
+  let weeklyChallenges = 0;
+  let milestones = 0;
+  let weeklyChallengesCleared = 0;
+  let challengePlayMins = 0;
+
+  for (let day = 0; day < config.totalDays; day++) {
+    if (day < persona.startDay) continue;
+
+    const dayInWeek = day % 7;
+    const isPlayingToday = dayInWeek < persona.sessionsPerWeek;
+
+    if (isPlayingToday) {
+      passive += persona.minutesPerSession * config.xpPerMinute;
+      dailyQuests += config.dailyQuestXp;
+      milestones += milestoneXpPerPlayDay;
+
+      const currentWeek = Math.floor(day / 7);
+      const weeksAvailable = currentWeek + 1;
+
+      if (config.isWeeklyStackable) {
+        challengePlayMins += persona.minutesPerSession;
+        const clearable = Math.floor(challengePlayMins / config.challengeClearMins);
+        if (clearable > 0) {
+          const toClear = Math.min(clearable, weeksAvailable - weeklyChallengesCleared);
+          if (toClear > 0) {
+            weeklyChallenges += config.weeklyChallengeXp * toClear;
+            weeklyChallengesCleared += toClear;
+            challengePlayMins -= toClear * config.challengeClearMins;
+          }
+        }
+      } else if (dayInWeek === 0 && weeksAvailable > weeklyChallengesCleared) {
+        weeklyChallenges += config.weeklyChallengeXp;
+        weeklyChallengesCleared = weeksAvailable;
+      }
+    }
+  }
+
+  return {
+    passive,
+    dailyQuests,
+    weeklyChallenges,
+    milestones,
+    total: passive + dailyQuests + weeklyChallenges + milestones,
+  };
 }

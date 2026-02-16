@@ -3,13 +3,20 @@ import { Pencil, Check, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Slider } from '@/components/ui/Slider';
 import { useSeasonStore, useUIStore } from '@/store/useSeasonStore';
-import type { Persona } from '@/engine/types';
+import type { Persona, XpBreakdown } from '@/engine/types';
 
 const COLOR_OPTIONS = ['#818cf8', '#fbbf24', '#34d399', '#f472b6', '#22d3ee', '#a855f7'];
 
+const XP_SOURCES: { key: keyof Omit<XpBreakdown, 'total'>; label: string; color: string }[] = [
+    { key: 'passive', label: 'Play Time', color: '#64748b' },
+    { key: 'dailyQuests', label: 'Daily Quests', color: '#94a3b8' },
+    { key: 'weeklyChallenges', label: 'Challenges', color: '#b0bec5' },
+    { key: 'milestones', label: 'Milestones', color: '#d1d9e0' },
+];
+
 interface PersonaCardProps {
     persona: Persona;
-    result: { data: { tier: number; totalXp: number }[] };
+    result: { data: { tier: number; totalXp: number }[]; xpBreakdown: XpBreakdown };
 }
 
 export const PersonaCard = ({ persona, result }: PersonaCardProps) => {
@@ -27,13 +34,16 @@ export const PersonaCard = ({ persona, result }: PersonaCardProps) => {
     const finalTier = Math.floor(result.data[result.data.length - 1]?.tier || 0);
     const completionRate = Math.min(100, Math.floor((finalTier / config.totalTiers) * 100));
 
-    const activeDays = config.totalDays - persona.startDay;
-    const activeWeeks = Math.ceil(activeDays / 7);
-    const totalPlayDays = Math.min(activeDays, activeWeeks * persona.sessionsPerWeek);
-    const totalHours = Math.round((totalPlayDays * persona.minutesPerSession) / 60);
-    const hoursPerTier = finalTier > 0 ? (totalHours / finalTier).toFixed(1) : '—';
+    const completed = finalTier >= config.totalTiers;
+    const completionDay = completed
+        ? result.data.findIndex(d => d.tier >= config.totalTiers) + 1
+        : -1;
+
     const tiersShort = Math.max(0, config.totalTiers - finalTier);
     const estCost = tiersShort * config.costPerTier;
+
+    const { xpBreakdown } = result;
+    const seasonXp = config.totalTiers * config.xpPerTier;
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -137,23 +147,51 @@ export const PersonaCard = ({ persona, result }: PersonaCardProps) => {
                         )}
                     </div>
 
-                    {/* 2x2 outcome stats */}
+                    {/* Outcome stats */}
                     <div className="grid grid-cols-2 gap-2">
                         <div className="bg-sage-50 px-3 py-2 rounded-lg border border-sage-100">
                             <p className="text-[10px] text-sage-400 uppercase font-bold">Final Tier</p>
                             <p className="text-lg font-bold text-sage-900">{finalTier.toLocaleString()} <span className="text-xs text-sage-400 font-normal">/ {config.totalTiers.toLocaleString()}</span></p>
                         </div>
                         <div className="bg-sage-50 px-3 py-2 rounded-lg border border-sage-100">
-                            <p className="text-[10px] text-sage-400 uppercase font-bold">Completion</p>
-                            <p className="text-lg font-bold text-sage-900">{completionRate}%</p>
+                            <p className="text-[10px] text-sage-400 uppercase font-bold">{completed ? 'Completed' : 'Completion'}</p>
+                            <p className="text-lg font-bold text-sage-900">
+                                {completed
+                                    ? <>Day <span className="text-emerald-600">{completionDay}</span></>
+                                    : <>{completionRate}%</>
+                                }
+                            </p>
                         </div>
-                        <div className="bg-sage-50 px-3 py-2 rounded-lg border border-sage-100">
-                            <p className="text-[10px] text-sage-400 uppercase font-bold">Play Time</p>
-                            <p className="text-lg font-bold text-sage-900">{totalHours.toLocaleString()}<span className="text-xs text-sage-400 font-normal">h</span></p>
+                    </div>
+
+                    {/* XP Breakdown bar */}
+                    <div>
+                        <p className="text-[10px] text-sage-400 uppercase font-bold mb-1.5">XP Sources</p>
+                        <div className="w-full h-5 rounded-full overflow-hidden flex bg-sage-100">
+                            {XP_SOURCES.map(({ key, color }) => {
+                                const pct = seasonXp > 0 ? (xpBreakdown[key] / seasonXp) * 100 : 0;
+                                if (pct < 0.5) return null;
+                                return (
+                                    <div
+                                        key={key}
+                                        className="h-full transition-all duration-500"
+                                        style={{ width: `${pct}%`, backgroundColor: color }}
+                                    />
+                                );
+                            })}
                         </div>
-                        <div className="bg-sage-50 px-3 py-2 rounded-lg border border-sage-100">
-                            <p className="text-[10px] text-sage-400 uppercase font-bold">Hrs / Tier</p>
-                            <p className="text-lg font-bold text-sage-900">{hoursPerTier}</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
+                            {XP_SOURCES.map(({ key, label, color }) => {
+                                const pct = seasonXp > 0 ? (xpBreakdown[key] / seasonXp) * 100 : 0;
+                                if (pct < 0.5) return null;
+                                return (
+                                    <div key={key} className="flex items-center gap-1">
+                                        <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
+                                        <span className="text-[10px] text-sage-500">{label}</span>
+                                        <span className="text-[10px] font-mono text-sage-600">{Math.round(pct)}%</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
