@@ -4,6 +4,8 @@ An interactive tool for game designers and product managers to model battle pass
 
 [Live Tool](https://mmhchan.github.io/battlepass-simulator/)
 
+![Battle Pass Simulator screenshot](public/screenshot.png)
+
 ## The Objective
 
 Battle pass economies are difficult to balance by intuition alone. A season that feels fair to a daily player may be punishing to a weekend-only player — and the difference shows up in churn and conversion, not in spreadsheets. This tool simulates day-by-day progression for configurable player personas so you can visualize:
